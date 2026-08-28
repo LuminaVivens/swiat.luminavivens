@@ -1,0 +1,19 @@
+{
+  "name": "lumina-vivens-webxr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "generate:relics": "node scripts/export-relics.mjs",
+    "compress:models": "node scripts/compress-models.mjs"
+  },
+  "dependencies": {
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
