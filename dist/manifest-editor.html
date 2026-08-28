@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Edytor manifestu — Lumina Vivens</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #05070c; overflow: hidden; font-family: system-ui, sans-serif; color: #e8dcc8; }
+  #canvas-container { position: fixed; inset: 0; }
+
+  #sidebar {
+    position: fixed; right: 0; top: 0; width: 340px; height: 100%;
+    background: rgba(10, 10, 15, 0.94); backdrop-filter: blur(16px);
+    border-left: 1px solid rgba(212, 175, 55, 0.25);
+    overflow-y: auto; padding: 18px; z-index: 100;
+  }
+  .title { font-size: 1.1rem; color: #d4af37; margin-bottom: 14px; text-align: center;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.3); padding-bottom: 10px; letter-spacing: 0.03em; }
+  h3 { font-size: 0.82rem; color: #d4af37; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .world-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .world-tile {
+    background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.25);
+    border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; font-size: 0.78rem;
+    transition: all 0.2s;
+  }
+  .world-tile:hover { background: rgba(212, 175, 55, 0.2); transform: translateY(-2px); }
+
+  label { display: block; font-size: 0.72rem; color: rgba(232, 220, 200, 0.7); margin-top: 8px; margin-bottom: 3px; }
+  input, select {
+    width: 100%; padding: 7px 8px; background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 5px; color: #e8dcc8; font-size: 0.8rem;
+  }
+  input:focus, select:focus { outline: none; border-color: #d4af37; }
+
+  .btn {
+    width: 100%; padding: 9px; margin-top: 8px; background: rgba(212, 175, 55, 0.15);
+    border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 6px; color: #d4af37;
+    cursor: pointer; font-size: 0.8rem; transition: all 0.2s;
+  }
+  .btn:hover { background: rgba(212, 175, 55, 0.3); }
+  .btn.primary { background: rgba(79, 209, 197, 0.18); border-color: rgba(79, 209, 197, 0.5); color: #4fd1c5; }
+  .btn.primary:hover { background: rgba(79, 209, 197, 0.32); }
+  .btn.secondary { background: rgba(143, 179, 255, 0.15); border-color: rgba(143, 179, 255, 0.4); color: #8fb3ff; }
+  .btn.secondary:hover { background: rgba(143, 179, 255, 0.28); }
+  .btn.danger { background: rgba(255, 107, 107, 0.12); border-color: rgba(255, 107, 107, 0.4); color: #ff6b6b; }
+
+  .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+  .btn-row .btn { margin-top: 0; }
+
+  .object-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 9px; background: rgba(0, 0, 0, 0.25); border-radius: 6px; margin-bottom: 5px;
+    font-size: 0.76rem; cursor: pointer; border: 1px solid transparent;
+  }
+  .object-item.selected { border-color: #d4af37; }
+  .object-item .meta { color: rgba(232, 220, 200, 0.55); font-size: 0.68rem; }
+  .object-item .remove-btn { color: #ff6b6b; cursor: pointer; font-size: 1.1rem; padding-left: 8px; }
+
+  #instructions {
+    position: fixed; bottom: 16px; left: 16px; z-index: 100;
+    background: rgba(10, 10, 15, 0.75); border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 8px; padding: 8px 14px; font-size: 0.75rem; color: rgba(232, 220, 200, 0.7);
+    pointer-events: none;
+  }
+  #status {
+    position: fixed; top: 16px; left: 16px; z-index: 100;
+    background: rgba(10, 10, 15, 0.75); border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 8px; padding: 8px 14px; font-size: 0.78rem; color: #d4af37;
+    max-width: 500px;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<div id="status">Edytor manifestu — wczytaj istniejący plik albo zacznij od zera</div>
+<div id="instructions">Lewy przycisk — obrót kamery • Prawy — przesunięcie • Scroll — zoom • Klik w obiekt — zaznacz</div>
+
+<div id="sidebar">
+  <div class="title">✦ Edytor manifestu ✦</div>
+
+  <h3>Istniejący manifest</h3>
+  <button class="btn secondary" onclick="window.loadExistingManifest()">⤓ Wczytaj manifest.json</button>
+  <p style="font-size:0.68rem; color:rgba(232,220,200,0.5); margin-top:6px;">
+    Wczytuje wszystkie elementy z Twojego aktualnego <code>public/manifest.json</code> do sceny —
+    dopiero wtedy eksport nie zgubi reszty świata.
+  </p>
+
+  <h3>Dodaj placeholder świata</h3>
+  <div class="world-grid" id="world-grid"></div>
+
+  <h3>Lub wczytaj model .glb</h3>
+  <label>URL modelu (np. /models/relikwia-fizyczny.glb)</label>
+  <input type="text" id="model-url" placeholder="/models/twoj-model.glb" />
+  <button class="btn" onclick="window.addFromUrl()">Dodaj z URL</button>
+
+  <label style="margin-top:10px">...albo wrzuć plik z dysku (tylko podgląd)</label>
+  <input type="file" id="file-upload" accept=".glb" />
+
+  <h3>Właściwości zaznaczonego</h3>
+  <label>ID (bez zmian dla istniejących!)</label>
+  <input type="text" id="prop-id" placeholder="piece-001" />
+  <label>Nazwa</label>
+  <input type="text" id="prop-name" placeholder="Fragment..." />
+  <label>Świat</label>
+  <select id="prop-world">
+    <option value="fizyczny">fizyczny</option>
+    <option value="energetyczny">energetyczny</option>
+    <option value="pustka">pustka</option>
+    <option value="duchowy">duchowy</option>
+  </select>
+  <label>Warstwa (layer)</label>
+  <input type="number" id="prop-layer" min="1" value="1" />
+  <label>Promień zebrania (pickupRadius)</label>
+  <input type="number" id="prop-radius" min="0.1" step="0.1" value="1.3" />
+  <label>Ścieżka docelowa .glb (glbUrl) — wpisz gdzie ostatecznie umieścisz plik</label>
+  <input type="text" id="prop-glburl" placeholder="/models/twoj-model.glb" />
+
+  <div class="btn-row">
+    <button class="btn" onclick="window.setGizmoMode('translate')">Przesuń</button>
+    <button class="btn" onclick="window.setGizmoMode('rotate')">Obróć</button>
+    <button class="btn" onclick="window.setGizmoMode('scale')">Skaluj</button>
+  </div>
+
+  <h3>Obiekty w scenie (<span id="object-count">0</span>)</h3>
+  <div id="object-list"></div>
+
+  <button class="btn danger" onclick="window.clearAll()">🗑️ Wyczyść wszystko</button>
+  <button class="btn primary" onclick="window.exportManifest()">⬇ Eksportuj manifest.json</button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+// Ten sam język wizualny co w PuzzleManager.js — geometrie tylko jako
+// szybki podgląd, zanim podepniesz właściwy .glb
+const WORLD_PREVIEW = {
+  fizyczny:      { geo: () => new THREE.DodecahedronGeometry(0.4, 0), color: 0xd97b4f },
+  energetyczny:  { geo: () => new THREE.OctahedronGeometry(0.42, 0), color: 0x7fb8ff, wireframe: true },
+  pustka:        { geo: () => new THREE.BoxGeometry(0.22, 0.22, 0.22), color: 0x0a0a0a, emissive: 0x3355ff },
+  duchowy:       { geo: () => new THREE.ConeGeometry(0.26, 0.95, 6), color: 0xffe9b8 },
+};
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070c);
+scene.fog = new THREE.FogExp2(0x05070c, 0.02);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(8, 6, 8);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x8fb3ff, 0x0a0a12, 0.7));
+const dirLight = new THREE.DirectionalLight(0xfff2d9, 1.0);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(60, 64),
+  new THREE.MeshStandardMaterial({ color: 0x11151f, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+const grid = new THREE.GridHelper(120, 60, 0x2a3550, 0x161c2c);
+grid.position.y = 0.01;
+scene.add(grid);
+
+const orbitControls = new OrbitControls(camera, renderer.domElement);
+orbitControls.enableDamping = true;
+orbitControls.dampingFactor = 0.05;
+
+const transformControl = new TransformControls(camera, renderer.domElement);
+transformControl.addEventListener('dragging-changed', (e) => { orbitControls.enabled = !e.value; });
+scene.add(transformControl);
+
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+// --- Zarządzanie obiektami --------------------------------------------
+let objects = [];
+let selected = null;
+let idCounter = 1;
+
+function nextId() {
+  return `piece-${String(idCounter++).padStart(3, '0')}`;
+}
+
+// Podnosi idCounter tak, żeby nowe automatyczne id nigdy nie kolidowały
+// z tymi wczytanymi z istniejącego manifestu (np. "piece-012" -> licznik od 13)
+function bumpIdCounterPast(id) {
+  const match = /(\d+)$/.exec(id ?? '');
+  if (!match) return;
+  const n = parseInt(match[1], 10);
+  if (n >= idCounter) idCounter = n + 1;
+}
+
+function addPlaceholder(world) {
+  const style = WORLD_PREVIEW[world];
+  const material = new THREE.MeshStandardMaterial({
+    color: style.color, emissive: style.emissive ?? style.color,
+    emissiveIntensity: 0.6, wireframe: !!style.wireframe, flatShading: true,
+  });
+  const mesh = new THREE.Mesh(style.geo(), material);
+  mesh.position.set((Math.random() - 0.5) * 8, 0.6, (Math.random() - 0.5) * 8);
+  scene.add(mesh);
+  registerObject(mesh, { world, name: `Fragment (${world})`, glbUrl: '' });
+}
+
+function addFromUrlOrFile(url, sourceLabel, presetTransform) {
+  gltfLoader.load(
+    url,
+    (gltf) => {
+      const model = gltf.scene;
+
+      if (presetTransform) {
+        model.position.set(...presetTransform.position);
+        model.scale.setScalar(presetTransform.scale ?? 1);
+        model.rotation.y = presetTransform.rotationY ?? 0;
+      } else {
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        model.scale.setScalar(0.8 / maxDim);
+        model.position.set((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8);
+      }
+
+      scene.add(model);
+      registerObject(model, {
+        name: presetTransform?.name ?? sourceLabel,
+        world: presetTransform?.world ?? 'fizyczny',
+        glbUrl: presetTransform?.glbUrl ?? (sourceLabel.startsWith('/') ? sourceLabel : ''),
+        id: presetTransform?.id,
+        layer: presetTransform?.layer,
+        pickupRadius: presetTransform?.pickupRadius,
+      });
+      setStatus(`Wczytano: ${sourceLabel}`);
+    },
+    undefined,
+    () => setStatus(`Błąd wczytywania: ${sourceLabel} — sprawdź URL/CORS`, true)
+  );
+}
+
+function registerObject(mesh, defaults) {
+  const id = defaults.id ?? nextId();
+  if (defaults.id) bumpIdCounterPast(defaults.id);
+
+  const obj = {
+    id,
+    name: defaults.name,
+    world: defaults.world,
+    layer: defaults.layer ?? 1,
+    pickupRadius: defaults.pickupRadius ?? 1.3,
+    glbUrl: defaults.glbUrl ?? '',
+    mesh,
+  };
+  objects.push(obj);
+  select(obj);
+  refreshList();
+  return obj;
+}
+
+function select(obj) {
+  selected = obj;
+  transformControl.attach(obj.mesh);
+  document.getElementById('prop-id').value = obj.id;
+  document.getElementById('prop-name').value = obj.name;
+  document.getElementById('prop-world').value = obj.world;
+  document.getElementById('prop-layer').value = obj.layer;
+  document.getElementById('prop-radius').value = obj.pickupRadius;
+  document.getElementById('prop-glburl').value = obj.glbUrl;
+  refreshList();
+}
+
+function refreshList() {
+  const list = document.getElementById('object-list');
+  document.getElementById('object-count').textContent = objects.length;
+  list.innerHTML = '';
+  objects.forEach((obj) => {
+    const item = document.createElement('div');
+    item.className = 'object-item' + (obj === selected ? ' selected' : '');
+    item.innerHTML = `<span>${obj.name}<div class="meta">${obj.id} · ${obj.world} · warstwa ${obj.layer}</div></span><span class="remove-btn">×</span>`;
+    item.querySelector('span').addEventListener('click', () => select(obj));
+    item.querySelector('.remove-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      scene.remove(obj.mesh);
+      objects = objects.filter((o) => o !== obj);
+      if (selected === obj) { transformControl.detach(); selected = null; }
+      refreshList();
+    });
+    list.appendChild(item);
+  });
+}
+
+function setStatus(text, isError = false) {
+  const el = document.getElementById('status');
+  el.textContent = text;
+  el.style.color = isError ? '#ff6b6b' : '#d4af37';
+}
+
+// --- Panel właściwości -> zapis do obiektu ----------------------------
+['prop-id', 'prop-name', 'prop-world', 'prop-layer', 'prop-radius', 'prop-glburl'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', () => {
+    if (!selected) return;
+    selected.id = document.getElementById('prop-id').value || selected.id;
+    selected.name = document.getElementById('prop-name').value || selected.name;
+    selected.world = document.getElementById('prop-world').value;
+    selected.layer = parseInt(document.getElementById('prop-layer').value, 10) || 1;
+    selected.pickupRadius = parseFloat(document.getElementById('prop-radius').value) || 1.3;
+    selected.glbUrl = document.getElementById('prop-glburl').value;
+    refreshList();
+  });
+});
+
+// --- Kafelki światów ---------------------------------------------------
+const worldGrid = document.getElementById('world-grid');
+Object.keys(WORLD_PREVIEW).forEach((world) => {
+  const tile = document.createElement('div');
+  tile.className = 'world-tile';
+  tile.textContent = world;
+  tile.addEventListener('click', () => addPlaceholder(world));
+  worldGrid.appendChild(tile);
+});
+
+// --- Klik w scenę -> zaznaczenie --------------------------------------
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+renderer.domElement.addEventListener('click', (event) => {
+  if (event.target !== renderer.domElement) return;
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(scene.children, true);
+  if (hits.length === 0) return;
+  let target = hits[0].object;
+  while (target.parent && target.parent !== scene) target = target.parent;
+  const obj = objects.find((o) => o.mesh === target);
+  if (obj) select(obj);
+});
+
+// --- Funkcje globalne (przyciski w HTML) ------------------------------
+window.setGizmoMode = (mode) => transformControl.setMode(mode);
+
+window.addFromUrl = () => {
+  const url = document.getElementById('model-url').value.trim();
+  if (!url) { setStatus('Wklej najpierw URL do pliku .glb', true); return; }
+  addFromUrlOrFile(url, url);
+};
+
+document.getElementById('file-upload').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const blobUrl = URL.createObjectURL(file);
+  addFromUrlOrFile(blobUrl, file.name);
+  setStatus(`Podgląd "${file.name}" — pamiętaj: to tylko podgląd. Wpisz w polu "glbUrl" docelową ścieżkę (np. /models/${file.name}) i faktycznie skopiuj tam ten plik.`);
+});
+
+// --- Wczytywanie istniejącego manifest.json ----------------------------
+window.loadExistingManifest = async () => {
+  setStatus('Wczytuję manifest.json...');
+  let manifest;
+  try {
+    const res = await fetch('/manifest.json');
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    manifest = await res.json();
+  } catch (err) {
+    setStatus(`Nie udało się wczytać /manifest.json (${err.message}). Uruchamiasz edytor przez "npm run dev"?`, true);
+    return;
+  }
+
+  const pieces = manifest.pieces ?? [];
+  if (pieces.length === 0) {
+    setStatus('manifest.json jest pusty — nie ma czego wczytywać.');
+    return;
+  }
+
+  setStatus(`Wczytuję ${pieces.length} istniejących element(ów)...`);
+
+  for (const piece of pieces) {
+    // Unikamy podwójnego wczytania tego samego id, gdyby ktoś kliknął
+    // "Wczytaj" drugi raz przez pomyłkę
+    if (objects.some((o) => o.id === piece.id)) continue;
+
+    const presetTransform = {
+      id: piece.id,
+      name: piece.name ?? piece.id,
+      world: piece.world ?? 'fizyczny',
+      layer: piece.layer ?? 1,
+      pickupRadius: piece.pickupRadius ?? 1.3,
+      glbUrl: piece.glbUrl ?? '',
+      position: piece.position ?? [0, 0, 0],
+      scale: piece.scale ?? 1,
+      rotationY: piece.rotationY ?? 0,
+    };
+
+    if (piece.glbUrl) {
+      addFromUrlOrFile(piece.glbUrl, piece.glbUrl, presetTransform);
+    } else {
+      // Element bez glbUrl (placeholder) — od razu tworzymy bryłę
+      // w stylu jego świata, bez czekania na sieć
+      const style = WORLD_PREVIEW[presetTransform.world] ?? WORLD_PREVIEW.fizyczny;
+      const material = new THREE.MeshStandardMaterial({
+        color: style.color, emissive: style.emissive ?? style.color,
+        emissiveIntensity: 0.6, wireframe: !!style.wireframe, flatShading: true,
+      });
+      const mesh = new THREE.Mesh(style.geo(), material);
+      mesh.position.set(...presetTransform.position);
+      mesh.scale.setScalar(presetTransform.scale);
+      mesh.rotation.y = presetTransform.rotationY;
+      scene.add(mesh);
+      registerObject(mesh, presetTransform);
+    }
+  }
+
+  setStatus(`Gotowe — wczytano ${pieces.length} element(ów) z manifest.json. Teraz możesz dodać/poprawić i bezpiecznie wyeksportować całość.`);
+};
+
+window.clearAll = () => {
+  if (!confirm('Usunąć wszystkie obiekty z edytora?')) return;
+  objects.forEach((o) => scene.remove(o.mesh));
+  objects = [];
+  transformControl.detach();
+  selected = null;
+  refreshList();
+};
+
+window.exportManifest = () => {
+  const pieces = objects.map((obj) => ({
+    id: obj.id,
+    name: obj.name,
+    world: obj.world,
+    layer: obj.layer,
+    position: [
+      Math.round(obj.mesh.position.x * 100) / 100,
+      0,
+      Math.round(obj.mesh.position.z * 100) / 100,
+    ],
+    pickupRadius: obj.pickupRadius,
+    glbUrl: obj.glbUrl || null,
+    scale: Math.round(obj.mesh.scale.x * 1000) / 1000,
+    rotationY: Math.round(obj.mesh.rotation.y * 1000) / 1000,
+  }));
+
+  const json = JSON.stringify({ pieces }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'manifest.json';
+  a.click();
+  setStatus(`Wyeksportowano ${pieces.length} element(ów) — podmień public/manifest.json pobranym plikiem.`);
+};
+
+// --- Pętla animacji -----------------------------------------------------
+function animate() {
+  requestAnimationFrame(animate);
+  orbitControls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

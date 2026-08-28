@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lumina Vivens — Przestrzeń WebXR</title>
+    <style>
+#portal-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  pointer-events: none;
+  background: radial-gradient(circle at center, transparent 30%, #05070c 100%);
+  opacity: 0;
+  transition: opacity 0.15s linear;
+}
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #05070c;
+        height: 100%;
+        width: 100%;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+      }
+      #hud {
+        position: fixed;
+        left: 16px;
+        bottom: 16px;
+        color: #f4f1ea;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        background: rgba(10, 14, 22, 0.6);
+        padding: 7px 12px;
+        border-radius: 6px;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        pointer-events: none;
+        user-select: none;
+      }
+      #toast {
+        position: fixed;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(-12px);
+        background: rgba(10, 14, 22, 0.85);
+        border: 1px solid rgba(207, 216, 227, 0.25);
+        color: #f4f1ea;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        opacity: 0;
+        transition: opacity 0.4s ease, transform 0.4s ease;
+        pointer-events: none;
+        user-select: none;
+      }
+      #toast.visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      #name-entry {
+        position: fixed;
+        inset: 0;
+        background: rgba(5, 7, 12, 0.92);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+        font-family: system-ui, sans-serif;
+      }
+      #name-entry.hidden {
+        display: none;
+      }
+      #name-entry-box {
+        background: rgba(15, 18, 28, 0.9);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        border-radius: 12px;
+        padding: 32px 36px;
+        text-align: center;
+        max-width: 340px;
+      }
+      #name-entry-box h1 {
+        color: #d4af37;
+        font-size: 1.1rem;
+        margin: 0 0 10px;
+        letter-spacing: 0.03em;
+      }
+      #name-entry-box .tagline {
+        color: #f2e8d5;
+        font-size: 0.88rem;
+        font-style: italic;
+        margin: 0 0 14px;
+      }
+      #name-entry-box p {
+        color: rgba(232, 220, 200, 0.6);
+        font-size: 0.82rem;
+        margin: 0 0 18px;
+      }
+      #name-input {
+        width: 100%;
+        padding: 10px 12px;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(212, 175, 55, 0.35);
+        border-radius: 6px;
+        color: #e8dcc8;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+        margin-bottom: 14px;
+      }
+      #name-input:focus {
+        outline: none;
+        border-color: #d4af37;
+      }
+      #name-submit {
+        width: 100%;
+        padding: 10px;
+        background: rgba(79, 209, 197, 0.18);
+        border: 1px solid rgba(79, 209, 197, 0.5);
+        border-radius: 6px;
+        color: #4fd1c5;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      #name-submit:hover {
+        background: rgba(79, 209, 197, 0.32);
+      }
+      #home-link {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 150;
+        display: block;
+        width: 52px;
+        height: 52px;
+        opacity: 0.8;
+        transition: opacity 0.2s, transform 0.2s;
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+      }
+      #home-link:hover {
+        opacity: 1;
+        transform: scale(1.08);
+      }
+      #home-link img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      #chat-panel {
+        position: fixed;
+        left: 16px;
+        bottom: 62px;
+        width: 300px;
+        z-index: 120;
+        font-family: system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #chat-panel.hidden {
+        display: none;
+      }
+      #chat-log {
+        max-height: 140px;
+        overflow-y: auto;
+        background: rgba(10, 14, 22, 0.55);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12.5px;
+        color: rgba(244, 241, 234, 0.9);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      #chat-log .chat-line .chat-name {
+        color: #d4af37;
+        font-weight: 600;
+        margin-right: 5px;
+      }
+      #chat-log:empty {
+        display: none;
+      }
+      #chat-form {
+        display: flex;
+      }
+      #chat-input {
+        flex: 1;
+        padding: 7px 10px;
+        background: rgba(10, 14, 22, 0.65);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        border-radius: 6px;
+        color: #f4f1ea;
+        font-size: 12.5px;
+      }
+      #chat-input:focus {
+        outline: none;
+        border-color: #d4af37;
+        background: rgba(10, 14, 22, 0.85);
+      }
+      #chat-input::placeholder {
+        color: rgba(244, 241, 234, 0.4);
+      }
+      #passage-fade {
+        position: fixed;
+        inset: 0;
+        background: #f2e8d5;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 300;
+        transition: opacity 0.9s ease;
+      }
+      #passage-fade.active {
+        opacity: 1;
+        transition: opacity 0.7s ease;
+      }
+      #passage-fade.teleport-flash {
+        background: #05070c;
+        opacity: 1;
+        transition: opacity 0.12s ease;
+      }
+#journey-overlay {
+  position: fixed;
+  inset: 0;
+  background: #05070c;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.1s ease;
+}
+#journey-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+#journey-media {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.journey-item {
+  max-width: 92%;
+  max-height: 92%;
+  object-fit: contain;
+  border-radius: 20px;
+  filter: drop-shadow(0 0 40px rgba(212, 175, 55, 0.25));
+  opacity: 0;
+  animation: journey-fade-in 1.4s ease forwards;
+}
+
+@keyframes journey-fade-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+#journey-hint {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(244, 241, 234, 0.5);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  pointer-events: none;
+}
+    </style>
+    <script type="module" crossorigin src="/assets/index-DxGRMSMe.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/three-BpYb70J-.js">
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="runtime-error" style="display:none;position:fixed;inset:0;z-index:9999;place-items:center;background:#05070c;color:#f4f1ea;font:15px system-ui,sans-serif;padding:32px;text-align:center;">
+      <div style="max-width:620px;">
+        <div style="font-size:28px;color:#d4af37;margin-bottom:12px;">✦ Lumina Vivens ✦</div>
+        <div id="runtime-error-text" style="opacity:.75;line-height:1.6;"></div>
+        <button onclick="location.reload()" style="margin-top:18px;padding:10px 18px;border-radius:999px;border:1px solid rgba(212,175,55,.45);background:rgba(212,175,55,.08);color:#f2e8d5;cursor:pointer;">Odśwież przestrzeń</button>
+      </div>
+    </div>
+    <script>
+      window.addEventListener('error', function (event) {
+        const box = document.getElementById('runtime-error');
+        const text = document.getElementById('runtime-error-text');
+        if (!box || !text) return;
+        box.style.display = 'grid';
+        text.textContent = 'Wystąpił błąd podczas uruchamiania przestrzeni: ' + (event.error?.message || event.message || 'nieznany błąd');
+      });
+      window.addEventListener('unhandledrejection', function (event) {
+        const box = document.getElementById('runtime-error');
+        const text = document.getElementById('runtime-error-text');
+        if (!box || !text) return;
+        box.style.display = 'grid';
+        text.textContent = 'Nie udało się uruchomić jednego z modułów przestrzeni: ' + (event.reason?.message || String(event.reason || 'nieznany błąd'));
+      });
+    </script>
+    <div id="passage-fade"></div>
+<div id="portal-vignette"></div>
+    <a id="home-link" href="https://luminavivens.eu" title="Powrót do Lumina Vivens">
+      <img src="/logo-powrot.png" alt="Lumina Vivens" />
+    </a>
+    <div id="hud">W/S — przód/tył &nbsp;•&nbsp; A/D — obrót &nbsp;•&nbsp; Shift — bieg &nbsp;•&nbsp; spacja — skok &nbsp;•&nbsp; Enter — czat &nbsp;•&nbsp; przycisk poniżej — wejście w VR</div>
+    <div id="toast"></div>
+
+    <div id="chat-panel" class="hidden">
+      <div id="chat-log"></div>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-input" type="text" maxlength="140" placeholder="Napisz coś... (Enter)" />
+      </form>
+    </div>
+
+    <div id="name-entry">
+      <div id="name-entry-box">
+        <h1>✦ Lumina Vivens ✦</h1>
+        <p class="tagline">Świat zaczyna się od obecności.</p>
+        <p>Jak mamy nazywać Cię w tej przestrzeni?</p>
+        <input id="name-input" type="text" maxlength="16" placeholder="Twoje imię" autocomplete="off" />
+        <button id="name-submit">Wejdź do świata</button>
+      </div>
+    </div>
+
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "journeys": [
+    {
+      "id": "journey-2026-w34",
+      "title": "Ciemność/Kwantowa Ciemność Edenu",
+      "theme": "opis energetyki/tematyki tego tygodnia — tylko dla Ciebie, nieużywane w UI",
+      "createdAt": "2026-08-17",
+      "skyPosition": [50, 34, -70],
+      "color": "#d4af37",
+      "items": [
+        { "type": "image", "src": "/journeys/2026-w34/01.jpg", "duration": 8 },
+        { "type": "image", "src": "/journeys/2026-w34/Ciemnosc_kwantowa_Edenu.png", "duration": 8 },
+        { "type": "video", "src": "/journeys/2026-w34/03.mp4" }
+      ]
+    }
+  ]
+}
