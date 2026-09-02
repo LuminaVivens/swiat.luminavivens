@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { VRButton } from './VRButtonPL.js';
 import { PlayerController } from './PlayerController.js';
 import { KeyboardInput } from './KeyboardInput.js';
 import { PuzzleManager } from './PuzzleManager.js';
@@ -24,65 +23,25 @@ import { createJourneyOverlay } from './JourneyOverlay.js';
 import { setupVRLocomotion } from './VRLocomotion.js';
 import { createEnergeticPocket } from './DimensionPocket.js';
 import { setupMouseLook } from './MouseLook.js';
+import { createWorldRuntime } from './core/WorldRuntime.js';
+import { WorldManager, WORLD_LAYER_ORDER } from './core/WorldManager.js';
+import { createRealityAtmosphere } from './core/RealityAtmosphere.js';
+import { createWorldHub } from './core/WorldHub.js';
+import { createMainPlazaFinish } from './core/MainPlazaFinish.js';
+import { createWaterCreationRealm } from './core/WaterCreationRealm.js';
+import { createElarionRealm } from './core/ElarionRealm.js';
+import { createAlgorithmsRealm } from './core/AlgorithmsRealm.js';
+import { createMemoryGateRealm } from './core/MemoryGateRealm.js';
+import { createObservationTowerRealm } from './core/ObservationTowerRealm.js';
+import { createDarknessFieldRealm } from './core/DarknessFieldRealm.js';
+import { createStoneCityRealm } from './core/StoneCityRealm.js';
 
 // ---------------------------------------------------------------------------
 // Scena, kamera, renderer
 // ---------------------------------------------------------------------------
 
 const container = document.getElementById('app');
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x05070c);
-scene.fog = new THREE.FogExp2(0x05070c, 0.015);
-
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  200
-);
-
-const cameraRig = new THREE.Group();
-cameraRig.add(camera);
-scene.add(cameraRig);
-
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    powerPreference: 'high-performance',
-  });
-} catch (err) {
-  console.error('[Lumina] Nie udało się uruchomić WebGL:', err);
-  const errorBox = document.createElement('div');
-  errorBox.style.cssText = 'position:fixed;inset:0;display:grid;place-items:center;background:#05070c;color:#f4f1ea;font:16px system-ui;padding:32px;text-align:center;z-index:9999';
-  errorBox.innerHTML = '<div><h1 style="color:#d4af37">Lumina Vivens</h1><p>Przeglądarka nie uruchomiła WebGL. Odśwież stronę lub sprawdź akcelerację sprzętową.</p></div>';
-  document.body.appendChild(errorBox);
-  throw err;
-}
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true;
-container.appendChild(renderer.domElement);
-
-document.body.appendChild(VRButton.createButton(renderer));
-
-// ---------------------------------------------------------------------------
-// Światła
-// ---------------------------------------------------------------------------
-
-const hemiLight = new THREE.HemisphereLight(0x8fb3ff, 0x0a0a12, 0.6);
-scene.add(hemiLight);
-
-const dirLight = new THREE.DirectionalLight(0xfff2d9, 1.1);
-dirLight.position.set(5, 10, 7);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(2048, 2048);
-dirLight.shadow.camera.left = -15;
-dirLight.shadow.camera.right = 15;
-dirLight.shadow.camera.top = 15;
-dirLight.shadow.camera.bottom = -15;
-scene.add(dirLight);
+const { scene, camera, cameraRig, renderer, hemiLight, dirLight } = createWorldRuntime(container);
 
 // ---------------------------------------------------------------------------
 // Podłoże
@@ -102,7 +61,8 @@ scene.add(grid);
 
 // Faliste wzgórza na horyzoncie — czysto dekoracyjne, otaczają płaską,
 // grywalną ziemię i znikają w mgle, zanim gracz miałby szansę tam dotrzeć
-scene.add(createDistantTerrain());
+const distantTerrain = createDistantTerrain();
+scene.add(distantTerrain);
 
 const sky = createSky(scene);
 const dayNightCycle = createDayNightCycle(scene, dirLight, hemiLight, sky);
@@ -114,7 +74,8 @@ const rain = createRain(scene);
 
 // Lustrzana podłoga — prawdziwe odbicie nieba i sceny, pierścieniem
 // wokół platformy Punktu Narodzin (patrz sekcja niżej)
-scene.add(createMirrorFloor());
+const mirrorFloor = createMirrorFloor();
+scene.add(mirrorFloor);
 let planetSystem = null;
 let planetPortal = null;
 const portalVignetteEl = document.getElementById('portal-vignette');
@@ -301,12 +262,158 @@ function showToast(text) {
 }
 
 // ---------------------------------------------------------------------------
+// Warstwy rzeczywistości
+// ---------------------------------------------------------------------------
+
+const worldManager = new WorldManager(scene, {
+  onChange: ({ meta }) => {
+    showToast(`${meta.symbol} Warstwa: ${meta.label}`);
+  },
+});
+
+let activeLayerId = worldManager.getCurrentLayer();
+const baseGroundColor = new THREE.Color(0x11151f);
+const darkGroundColor = new THREE.Color(0x020204);
+const avatarDarkLight = new THREE.PointLight(0xa9d4ff, 0, 8, 2);
+avatarDarkLight.position.set(0, 1.5, 0);
+scene.add(avatarDarkLight);
+
+let threshold = null;
+
+function applyLayerPresentation(layerId) {
+  activeLayerId = layerId;
+  const isDarkSpiritual = layerId === 'dark_spiritual';
+  grid.visible = !isDarkSpiritual;
+  waterBody.mesh.visible = !isDarkSpiritual;
+  mirrorFloor.visible = !isDarkSpiritual;
+  if (threshold) threshold.group.visible = !isDarkSpiritual;
+  if (genesisPoint) genesisPoint.group.visible = !isDarkSpiritual;
+  ground.material.color.copy(isDarkSpiritual ? darkGroundColor : baseGroundColor);
+}
+
+// ---------------------------------------------------------------------------
 // Dźwięk i Punkt Narodzin
 // ---------------------------------------------------------------------------
+
+const mainPlazaFinish = createMainPlazaFinish(scene);
 
 const genesisPoint = createGenesisPoint(scene, {
   onAwaken: () => soundManager.playAwaken(),
   onResonance: () => soundManager.playResonance(),
+});
+
+const waterCreationRealm = createWaterCreationRealm(scene);
+const elarionRealm = createElarionRealm(scene);
+const algorithmsRealm = createAlgorithmsRealm(scene);
+const memoryGateRealm = createMemoryGateRealm(scene);
+const observationTowerRealm = createObservationTowerRealm(scene);
+const darknessFieldRealm = createDarknessFieldRealm(scene);
+const stoneCityRealm = createStoneCityRealm(scene);
+let currentRealm = 'world';
+const REALM_RADIUS = 27;
+
+let realmTransitionLockUntil = 0;
+
+const realmRegistry = {
+  'woda-kreacji': {
+    realm: waterCreationRealm,
+    toast: '◌ Woda Kreacji',
+  },
+  elarion: {
+    realm: elarionRealm,
+    toast: '✧ Elarion',
+  },
+  algorytmy: {
+    realm: algorithmsRealm,
+    toast: '⌘ Algorytmy',
+  },
+  'brama-pamieci': {
+    realm: memoryGateRealm,
+    toast: '◇ Brama Pamięci',
+  },
+  'wieza-obserwacji': {
+    realm: observationTowerRealm,
+    toast: '△ Wieża Obserwacji',
+  },
+  'pole-ciemnosci': {
+    realm: darknessFieldRealm,
+    toast: '○ Pole Ciemności',
+  },
+  'kamienne-miasto': {
+    realm: stoneCityRealm,
+    toast: '⬡ Kamienne Miasto',
+  },
+};
+
+function setActiveRealmVisibility(activeRealmId = null) {
+  Object.entries(realmRegistry).forEach(([id, config]) => {
+    if (config?.realm?.root) config.realm.root.visible = id === activeRealmId;
+  });
+}
+
+setActiveRealmVisibility(null);
+
+function enterRealm(realmId) {
+  const config = realmRegistry[realmId];
+  if (!config || currentRealm === realmId) return;
+  realmTransitionLockUntil = performance.now() + 1400;
+  worldHub.setOpen(false);
+  soundManager.playPassage();
+  passageFadeEl.classList.add('active');
+
+  setTimeout(() => {
+    currentRealm = realmId;
+    setActiveRealmVisibility(realmId);
+    distantTerrain.visible = false;
+    chatInputEl?.blur();
+    avatar.position.copy(config.realm.entryPoint);
+    cameraRig.position.set(avatar.position.x, 0, avatar.position.z);
+    showToast(config.toast);
+  }, 650);
+
+  setTimeout(() => passageFadeEl.classList.remove('active'), 1300);
+}
+
+function returnToPunktZero() {
+  if (currentRealm === 'world') return;
+  realmTransitionLockUntil = performance.now() + 1400;
+  soundManager.playPassage();
+  passageFadeEl.classList.add('active');
+
+  setTimeout(() => {
+    currentRealm = 'world';
+    setActiveRealmVisibility(null);
+    distantTerrain.visible = true;
+    avatar.position.copy(GENESIS_RETURN_POSITION);
+    cameraRig.position.set(avatar.position.x, 0, avatar.position.z);
+    showToast('✦ Punkt Zero');
+  }, 650);
+
+  setTimeout(() => passageFadeEl.classList.remove('active'), 1300);
+}
+
+const worldHub = createWorldHub(scene, {
+  position: genesisPoint.group.position.clone(),
+  onSelect: (destination, index) => {
+    showToast(`${index + 1} • ${destination.label}`);
+  },
+  onActivate: (destination) => {
+    localStorage.setItem('luminaVivens.destination', destination.id);
+    if (realmRegistry[destination.id]) {
+      enterRealm(destination.id);
+      return;
+    }
+    showToast(`✦ Kierunek zapisany: ${destination.label}`);
+    soundManager.playAwaken();
+  },
+});
+
+const realityAtmosphere = createRealityAtmosphere(worldManager);
+genesisPoint.setLayerVisual(worldManager.getCurrentLayer());
+worldManager.subscribe(({ layer }) => {
+  genesisPoint.setLayerVisual(layer);
+  worldHub.setOpen(false);
+  applyLayerPresentation(layer);
 });
 
 // ---------------------------------------------------------------------------
@@ -337,9 +444,11 @@ function triggerTeleportFlash() {
   setTimeout(() => passageFadeEl.classList.remove('teleport-flash'), 140);
 }
 
-const threshold = createThreshold(scene, new THREE.Vector3(-14, 0, 14), {
+threshold = createThreshold(scene, new THREE.Vector3(-14, 0, 14), {
   onPass: triggerPassage,
 });
+
+applyLayerPresentation(worldManager.getCurrentLayer());
 
 // ---------------------------------------------------------------------------
 // System puzzli
@@ -444,9 +553,96 @@ chatInputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') chatInputEl.blur();
 });
 
+
+// 1–5 przełączają warstwy. Gdy Mapa Świata jest otwarta, 1–7 wybiera
+// zamiast tego węzeł podróży, więc oba systemy nie walczą o te same klawisze.
+window.addEventListener('keydown', (e) => {
+  if (!gameStarted || e.repeat) return;
+  const active = document.activeElement;
+  const isTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+  if (isTyping) return;
+
+  const index = Number(e.key) - 1;
+  if (worldHub.isOpen()) {
+    if (index >= 0 && index < 7) {
+      e.preventDefault();
+      worldHub.selectByIndex(index);
+    }
+    return;
+  }
+
+  if (index < 0 || index >= WORLD_LAYER_ORDER.length) return;
+  worldManager.setLayer(WORLD_LAYER_ORDER[index]);
+});
+
+// M otwiera holograficzną Mapę Świata wyłącznie przy Genesis / Punkcie Zero.
+window.addEventListener('keydown', (e) => {
+  if (!gameStarted || e.repeat || e.code !== 'KeyM') return;
+  const active = document.activeElement;
+  const isTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+  if (isTyping) return;
+
+  if (worldHub.isOpen()) {
+    worldHub.setOpen(false);
+    return;
+  }
+
+  if (currentRealm !== 'world') {
+    showToast('Mapa Świata pozostaje w Punkcie Zero.');
+    return;
+  }
+
+  if (!genesisPoint.isLocalNear()) {
+    showToast('Mapa Świata otwiera się przy Punkcie Zero.');
+    return;
+  }
+  if (activeLayerId === 'dark_spiritual') {
+    showToast('Ciemność Duchowa nie odsłania mapy.');
+    return;
+  }
+
+  worldHub.setOpen(true);
+  soundManager.playAwaken();
+});
+
+// Punkt Genesis jest docelowym, fizycznym interfejsem przejścia. Gdy gracz
+// znajduje się w jego kręgu, E przełącza do kolejnej warstwy bez teleportacji.
+window.addEventListener('keydown', (e) => {
+  if (!gameStarted || e.repeat || e.code !== 'KeyE') return;
+
+  // W destynacjach brama powrotna ma pierwszeństwo przed czatem.
+  const currentRealmConfig = realmRegistry[currentRealm];
+  if (currentRealmConfig?.realm.isNearReturn(avatar.position)) {
+    e.preventDefault();
+    chatInputEl?.blur();
+    returnToPunktZero();
+    return;
+  }
+
+  const active = document.activeElement;
+  const isTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+  if (isTyping || worldHub.isOpen()) return;
+
+  if (currentRealm !== 'world') return;
+
+  if (!genesisPoint.isLocalNear()) return;
+  worldManager.cycle(1);
+  soundManager.playAwaken();
+});
+
 // "Enter" poza polem czatu otwiera czat (skupia pole) — nie trzeba klikać
 window.addEventListener('keydown', (e) => {
   if (!gameStarted) return;
+  if (e.key === 'Escape' && worldHub.isOpen()) {
+    e.preventDefault();
+    worldHub.setOpen(false);
+    return;
+  }
+  if (e.key === 'Enter' && worldHub.isOpen()) {
+    e.preventDefault();
+    worldHub.activateSelected();
+    return;
+  }
   if (e.key === 'Enter' && document.activeElement !== chatInputEl) {
     e.preventDefault();
     chatInputEl.focus();
@@ -614,8 +810,9 @@ if (planetPortal) planetPortal.update(avatar.position);
   // tego dałoby się w nie realnie wejść, a avatar zawsze stoi na płaskim
   // y=0 niezależnie od rzeźby terenu pod nim — więc "wchodzenie" w
   // wzgórze wyglądałoby dokładnie tak, jak na Twoim zrzucie ekranu.
-  const distFromCenter = Math.hypot(avatar.position.x, avatar.position.z);
-  if (distFromCenter > MAX_PLAY_RADIUS) {
+  if (currentRealm === 'world') {
+    const distFromCenter = Math.hypot(avatar.position.x, avatar.position.z);
+    if (distFromCenter > MAX_PLAY_RADIUS) {
     const scale = MAX_PLAY_RADIUS / distFromCenter;
     avatar.position.x *= scale;
     avatar.position.z *= scale;
@@ -626,6 +823,24 @@ if (planetPortal) planetPortal.update(avatar.position);
       cameraRig.position.x = avatar.position.x;
       cameraRig.position.z = avatar.position.z;
     }
+    }
+  } else {
+    const realmConfig = realmRegistry[currentRealm];
+    const realmCenter = realmConfig?.realm.center;
+    if (realmCenter) {
+      const dx = avatar.position.x - realmCenter.x;
+      const dz = avatar.position.z - realmCenter.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > REALM_RADIUS) {
+        const scale = REALM_RADIUS / dist;
+        avatar.position.x = realmCenter.x + dx * scale;
+        avatar.position.z = realmCenter.z + dz * scale;
+        if (renderer.xr.isPresenting) {
+          cameraRig.position.x = avatar.position.x;
+          cameraRig.position.z = avatar.position.z;
+        }
+      }
+    }
   }
 
 if (avatarAnimator) {
@@ -635,12 +850,39 @@ if (avatarAnimator) {
   puzzleManager.update(avatar.position, delta);
   teleportSystem.update();
   dayNightCycle.update(delta);
+
+  const darkSpiritualActive = activeLayerId === 'dark_spiritual';
+  hemiLight.intensity = darkSpiritualActive ? 0.05 : hemiLight.intensity;
+  dirLight.intensity = darkSpiritualActive ? 0.12 : dirLight.intensity;
+  avatarDarkLight.intensity += ((darkSpiritualActive ? 1.35 : 0) - avatarDarkLight.intensity) * Math.min(1, delta * 3.5);
+  avatarDarkLight.position.set(avatar.position.x, avatar.position.y + 1.6, avatar.position.z);
+
   waterBody.update(delta);
   rain.update(delta, avatar.position);
-  threshold.update(delta, avatar.position);
+
+  const inMainWorld = currentRealm === 'world';
+  if (inMainWorld) threshold.update(delta, avatar.position);
 
   const allPlayerPositions = [avatar.position, ...[...remotePlayers.values()].map((e) => e.group.position)];
-  genesisPoint.update(delta, allPlayerPositions);
+  if (inMainWorld) genesisPoint.update(delta, allPlayerPositions);
+  worldHub.update(delta, inMainWorld ? avatar.position : null);
+  mainPlazaFinish.update(delta, inMainWorld && activeLayerId !== 'dark_spiritual');
+  realityAtmosphere.update(delta, avatar.position);
+  waterCreationRealm.update(delta, avatar.position, currentRealm === 'woda-kreacji');
+  elarionRealm.update(delta, avatar.position, currentRealm === 'elarion');
+  algorithmsRealm.update(delta, avatar.position, currentRealm === 'algorytmy');
+  memoryGateRealm.update(delta, avatar.position, currentRealm === 'brama-pamieci');
+  observationTowerRealm.update(delta, avatar.position, currentRealm === 'wieza-obserwacji');
+  darknessFieldRealm.update(delta, avatar.position, currentRealm === 'pole-ciemnosci');
+  stoneCityRealm.update(delta, avatar.position, currentRealm === 'kamienne-miasto');
+
+  if (currentRealm !== 'world' && performance.now() >= realmTransitionLockUntil) {
+    const currentRealmConfig = realmRegistry[currentRealm];
+    if (currentRealmConfig?.realm?.isNearReturn?.(avatar.position)) {
+      realmTransitionLockUntil = performance.now() + 2000;
+      returnToPunktZero();
+    }
+  }
 
   if (localNameLabel) {
     localNameLabel.position.set(avatar.position.x, avatar.position.y + NAME_LABEL_HEIGHT, avatar.position.z);
@@ -695,12 +937,4 @@ if (avatarAnimator) {
 
 renderer.setAnimationLoop(animate);
 
-// ---------------------------------------------------------------------------
-// Responsywność
-// ---------------------------------------------------------------------------
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});

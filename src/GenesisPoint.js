@@ -7,6 +7,14 @@ const PRESENCE_RADIUS = 5;
 // zacznie znikać
 const NOTICE_DURATION = 3.5;
 
+const LAYER_SEED_COLORS = Object.freeze({
+  physical: { color: 0xf4e4c1, emissive: 0xd4af37 },
+  energetic: { color: 0xbff7ff, emissive: 0x26d9ff },
+  void: { color: 0x8f84b8, emissive: 0x493b86 },
+  spiritual: { color: 0xf7ecff, emissive: 0xcaa7ff },
+  dark_spiritual: { color: 0xe3dcff, emissive: 0x7b66d9 },
+});
+
 function drawFloatingTextTexture(text) {
   const canvas = document.createElement('canvas');
   canvas.width = 768;
@@ -146,6 +154,20 @@ export function createGenesisPoint(scene, { onAwaken, onResonance } = {}) {
   noticeSprite.renderOrder = 998;
   group.add(noticeSprite);
 
+  // --- Podpowiedź przejścia między warstwami -----------------------------------
+  const layerPromptTexture = drawFloatingTextTexture('E  •  zmień warstwę rzeczywistości');
+  const layerPromptMaterial = new THREE.SpriteMaterial({
+    map: layerPromptTexture,
+    transparent: true,
+    depthTest: false,
+    opacity: 0,
+  });
+  const layerPromptSprite = new THREE.Sprite(layerPromptMaterial);
+  layerPromptSprite.scale.set(3.7, 0.62, 1);
+  layerPromptSprite.position.set(0, 1.35, 0);
+  layerPromptSprite.renderOrder = 998;
+  group.add(layerPromptSprite);
+
   // --- Wiązka łącząca dwóch najbliższych obecnych graczy -----------------------
   const linkGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
   const linkMaterial = new THREE.LineBasicMaterial({ color: 0xd4af37, transparent: true, opacity: 0 });
@@ -162,7 +184,9 @@ export function createGenesisPoint(scene, { onAwaken, onResonance } = {}) {
   let currentIntensity = 0.2;
   let currentTextOpacity = 0;
   let currentNoticeOpacity = 0;
+  let currentPromptOpacity = 0;
   let currentRingScale = 1;
+  let isLocalPlayerNear = false;
 
   /**
    * Wywołaj raz, kiedy gracz faktycznie wchodzi do świata (po wpisaniu
@@ -186,6 +210,7 @@ export function createGenesisPoint(scene, { onAwaken, onResonance } = {}) {
     const nearby = distances.filter((d) => d <= PRESENCE_RADIUS);
     const localDist = distances[0] ?? Infinity;
     const localNear = localDist <= PRESENCE_RADIUS;
+    isLocalPlayerNear = localNear;
 
     const isAwake = nearby.length > 0;
     const isResonating = nearby.length >= 2;
@@ -242,6 +267,11 @@ export function createGenesisPoint(scene, { onAwaken, onResonance } = {}) {
     noticeMaterial.opacity = currentNoticeOpacity;
     noticeSprite.position.y = 1.85 + Math.sin(time * 0.6 + 1) * 0.06;
 
+    const targetPromptOpacity = textRevealed && localNear ? 0.72 : 0;
+    currentPromptOpacity += (targetPromptOpacity - currentPromptOpacity) * Math.min(1, delta * 3);
+    layerPromptMaterial.opacity = currentPromptOpacity;
+    layerPromptSprite.position.y = 1.35 + Math.sin(time * 0.8 + 2) * 0.04;
+
     // Wiązka między dwoma najbliższymi obecnymi graczami
     if (isResonating) {
       const nearbyWithPos = playerPositions
@@ -264,5 +294,23 @@ export function createGenesisPoint(scene, { onAwaken, onResonance } = {}) {
     wasLocalNear = localNear;
   }
 
-  return { update, revealText, group };
+  function isLocalNear() {
+    return isLocalPlayerNear;
+  }
+
+  function setLayerVisual(layerId) {
+    const style = LAYER_SEED_COLORS[layerId] ?? LAYER_SEED_COLORS.physical;
+    seedMaterial.color.setHex(style.color);
+    seedMaterial.emissive.setHex(style.emissive);
+    seedLight.color.setHex(style.emissive);
+    ringMaterialColor(style.emissive);
+  }
+
+  function ringMaterialColor(hex) {
+    for (const ring of rings) ring.material.color.setHex(hex);
+    particleMaterial.color.setHex(hex);
+    linkMaterial.color.setHex(hex);
+  }
+
+  return { update, revealText, isLocalNear, setLayerVisual, group };
 }
